@@ -1,0 +1,127 @@
+---
+title: "Practical Machine Learning Project Assignment"
+author: "Monika Topolko"
+date: "June 30, 2019"
+output: html_document
+---
+
+This document is the final report of the Peer Assessment project from Coursera’s course Practical Machine Learning, as part of the Data Science Specialization.
+
+## Synopsis
+
+Using devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit* it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here.](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har)
+
+The training data for this project are available [here.](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+The test data are available [here.](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+The data for this project come from this [source.](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har)
+
+## Environment Preparation
+
+First we are going to upload the R libraries that are necessary for the complete analysis.
+
+```{r, echo=TRUE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(knitr)
+```
+
+
+## Loading and Processing the Data
+
+After downloading the datasets and reading them into R, the training dataset is divided into two separate datasets - a Training set (70% of the data) for the modeling process and a Test set (with the remaining 30% of the data) for the validations. The testing dataset is not changed and will only be used for the quiz results generation.
+
+```{r, echo=TRUE}
+training <- read.csv(file="./pml-training.csv", header=TRUE)
+testing <- read.csv(file="./pml-testing.csv", header=TRUE)
+```
+
+```{r, echo=TRUE}
+inTrain  <- createDataPartition(training$classe, p=0.7, list=FALSE)
+TrainSet <- training[inTrain, ]
+TestSet  <- training[-inTrain, ]
+```
+
+```{r, echo=TRUE}
+dim(TrainSet)
+dim(TestSet)
+```
+
+Both datasets have 160 variables. Those variables, however, have quite a lot of NA values. We are going to remove the variables that are mostly NA, as well as the Near Zero variance variables and the ID variables (columns 1-5).
+
+```{r, echo=TRUE}
+NA_values <- sapply(TrainSet, function(x) mean(is.na(x))) > 0.95
+TrainSet <- TrainSet[, NA_values==FALSE]
+TestSet  <- TestSet[, NA_values==FALSE]
+```
+
+```{r, echo=TRUE}
+nzv <- nearZeroVar(TrainSet)
+TrainSet <- TrainSet[, -nzv]
+TestSet  <- TestSet[, -nzv]
+```
+
+```{r, echo=TRUE}
+TrainSet <- TrainSet[, -(1:5)]
+TestSet  <- TestSet[, -(1:5)]
+```
+
+```{r, echo=TRUE}
+dim(TrainSet)
+dim(TestSet)
+```
+
+## Building Prediction Models
+
+Two methods will be applied to model the regressions in the Train dataset and the best one (with higher accuracy when applied to the Test dataset) will be used for the quiz predictions. The methods are Random Forests and Decision Tree.
+
+### Random Forests Method
+
+Using Random Forests the out of sample error should be small. The error will be estimated using the 30% testing sample. We should expect an error estimate of < 3%.
+
+```{r, echo=TRUE}
+# model fit 
+set.seed(123)
+modFitRF <- randomForest(classe ~ ., data = TrainSet, ntree = 1000)
+modFitRF$confusion
+```
+
+```{r, echo=TRUE}
+# prediction on the TestSet dataset
+predictionRF <- predict(modFitRF, TestSet, type = "class")
+confusionMatrix(predictionRF, TestSet$classe)
+```
+
+The accuracy of the Random Forests model is 99%.
+
+### Decision Trees Method
+
+We shouldn’t expect the accuracy to be as high when using Decision Tree method. Anything around 80% would be acceptable.
+
+```{r, echo=TRUE}
+# model fit
+modFitDT <- rpart(classe ~ ., data = TrainSet, method="class")
+fancyRpartPlot(modFitDT)
+```
+
+```{r, echo=TRUE}
+# prediction on the TestSet dataset
+set.seed(123)
+predictionDT <- predict(modFitDT, TestSet, type = "class")
+confusionMatrix(predictionDT, TestSet$classe)
+```
+
+The accuracy of the Decision Tree model is 81%.
+
+## Applying the Selected Model to the Test Data
+
+Because the accuracy of the Random Forests model was much higher then the accuracy of the Decision Tree model, the Random Forest model will be applied to predict the 20 quiz results (testing dataset) as shown below.
+
+```{r, echo=TRUE}
+predictTEST <- predict(modFitRF, newdata=testing)
+predictTEST
+```
